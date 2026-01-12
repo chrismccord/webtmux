@@ -1,0 +1,19 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go
+*.exe
+*.test
+*.out
+
+# Local build (not cross-compiled)
+/webtmux
+
+# Don't ignore builds/ - we want prebuilt binaries in repo

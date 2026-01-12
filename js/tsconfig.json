@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+      "outDir": "./dist/",
+      "jsx": "react-jsx",
+      "jsxImportSource": "preact",
+      "strictNullChecks": true,
+      "noUnusedLocals" : true,
+      "noImplicitThis": true,
+      "alwaysStrict": true,
+      "declaration": true,
+      "sourceMap": true,
+      "target": "esnext",
+      "module": "commonJS",
+      "baseUrl": ".",
+      "types": ["preact", "node"],
+      "paths": {
+          "*": ["./typings/*"]
+      }
+  },
+    "exclude": [
+      "node_modules",
+      "dist"
+    ]
+}
