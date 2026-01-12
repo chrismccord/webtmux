@@ -12,7 +12,7 @@ sudo curl -fsSL https://raw.githubusercontent.com/chrismccord/webtmux/main/build
   sudo chmod +x /usr/local/bin/webtmux && \
   sprite-env services create webtmux \
     --cmd /usr/local/bin/webtmux \
-    --args '-w,-c,user:pass,tmux,new-session,-A,-s,main' \
+    --args '-w,tmux,new-session,-A,-s,main' \
     --http-port 8080
 ```
 
