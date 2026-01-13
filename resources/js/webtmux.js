@@ -466,7 +466,10 @@ class WebTmux {
 
         if (base64Data && base64Data !== '?') {
           try {
-            const text = atob(base64Data);
+            // Decode base64 to bytes, then UTF-8 decode for proper emoji support
+            const binaryStr = atob(base64Data);
+            const bytes = Uint8Array.from(binaryStr, c => c.charCodeAt(0));
+            const text = new TextDecoder('utf-8').decode(bytes);
             console.log('OSC 52 decoded text:', text);
             navigator.clipboard.writeText(text).then(() => {
               console.log('OSC 52: Copied to clipboard!');
