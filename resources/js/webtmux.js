@@ -45,6 +45,7 @@ class WebTmux {
     this.inCopyMode = false;
     this.layout = null;
     this.pendingSessionSwitch = null;
+    this.oscBuffer = ''; // Buffer for OSC sequence detection
 
     this.init();
   }
@@ -114,6 +115,7 @@ class WebTmux {
 
       // Allow Cmd+V / Ctrl+V to paste
       if ((ev.metaKey || ev.ctrlKey) && ev.key === 'v') {
+        ev.preventDefault(); // Prevent browser's native paste
         navigator.clipboard.readText().then(text => {
           if (text) {
             const bytes = this.encoder.encode(text);
@@ -305,9 +307,13 @@ class WebTmux {
       case MSG.Output:
         // Decode base64 to Uint8Array for proper UTF-8 handling
         const binaryString = atob(payload);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
+
+        // Check for OSC 52 clipboard sequences and handle them
+        const processed = this.handleOSC52(binaryString);
+
+        const bytes = new Uint8Array(processed.length);
+        for (let i = 0; i < processed.length; i++) {
+          bytes[i] = processed.charCodeAt(i);
         }
         this.terminal.write(bytes);
         break;
@@ -404,6 +410,46 @@ class WebTmux {
   exitCopyMode() {
     this.sendMessage(MSG.TmuxCopyMode, '0');
     this.inCopyMode = false;
+  }
+
+  // Handle OSC 52 clipboard sequences from tmux
+  // Format: ESC ] 52 ; c ; BASE64 BEL  or  ESC ] 52 ; c ; BASE64 ESC \
+  handleOSC52(data) {
+    // Debug: check for any OSC sequences
+    if (data.includes('\x1b]')) {
+      console.log('OSC sequence detected in data, length:', data.length);
+      // Show hex dump of first 100 chars for debugging
+      const hex = [...data.substring(0, 100)].map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
+      console.log('Data hex:', hex);
+    }
+
+    // OSC 52 regex: \x1b]52;[cp];BASE64(\x07|\x1b\\)
+    const osc52Regex = /\x1b\]52;[cp];([A-Za-z0-9+/=]*?)(?:\x07|\x1b\\)/g;
+    let match;
+    let result = data;
+
+    while ((match = osc52Regex.exec(data)) !== null) {
+      console.log('OSC 52 match found:', match[0].length, 'bytes');
+      const base64Data = match[1];
+      if (base64Data && base64Data !== '?') {
+        try {
+          // Decode base64 to get the clipboard text
+          const text = atob(base64Data);
+          console.log('OSC 52: Decoded text:', text);
+          navigator.clipboard.writeText(text).then(() => {
+            console.log('OSC 52: Copied to clipboard:', text.substring(0, 50) + (text.length > 50 ? '...' : ''));
+          }).catch(err => {
+            console.warn('OSC 52: Failed to copy to clipboard:', err);
+          });
+        } catch (e) {
+          console.warn('OSC 52: Failed to decode base64:', e);
+        }
+      }
+      // Remove OSC 52 sequence from output (don't display it)
+      result = result.replace(match[0], '');
+    }
+
+    return result;
   }
 }
 
