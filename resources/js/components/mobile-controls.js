@@ -136,6 +136,12 @@ class WebtmuxMobileControls extends LitElement {
       height: 90px;
     }
 
+    .arrow-pad-wrap {
+      display: flex;
+      justify-content: center;
+      margin-top: 8px;
+    }
+
     .arrow-btn {
       background: #1a1a2e;
       border: 1px solid #0f3460;
@@ -365,6 +371,20 @@ class WebtmuxMobileControls extends LitElement {
           New
         </button>
       </div>
+
+      <div class="arrow-pad-wrap">
+        <div class="arrow-pad">
+          <button class="arrow-btn empty"></button>
+          <button class="arrow-btn" @click=${() => this.sendArrow('up')}>▲</button>
+          <button class="arrow-btn empty"></button>
+          <button class="arrow-btn" @click=${() => this.sendArrow('left')}>◀</button>
+          <button class="arrow-btn empty"></button>
+          <button class="arrow-btn" @click=${() => this.sendArrow('right')}>▶</button>
+          <button class="arrow-btn empty"></button>
+          <button class="arrow-btn" @click=${() => this.sendArrow('down')}>▼</button>
+          <button class="arrow-btn empty"></button>
+        </div>
+      </div>
     `;
   }
 
@@ -372,6 +392,20 @@ class WebtmuxMobileControls extends LitElement {
     // Send Ctrl+B (tmux prefix)
     // ASCII code for Ctrl+B is 0x02
     window.webtmux?.terminal?.input('\x02');
+  }
+
+  sendArrow(direction) {
+    const arrows = {
+      up: '\x1b[A',
+      down: '\x1b[B',
+      right: '\x1b[C',
+      left: '\x1b[D',
+    };
+    const sequence = arrows[direction];
+    if (!sequence) {
+      return;
+    }
+    window.webtmux?.sendInput?.(sequence);
   }
 
   splitPane(horizontal) {
