@@ -1,9 +1,10 @@
 package server
 
 import (
-	"encoding/base64"
+	"crypto/subtle"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -25,6 +26,7 @@ type rateLimiter struct {
 type attemptInfo struct {
 	failCount   int
 	lockedUntil time.Time
+	lastSeen    time.Time
 }
 
 // Per-IP lockout thresholds
@@ -79,7 +81,7 @@ func (rl *rateLimiter) cleanup() {
 
 	// Clean up per-IP entries
 	for ip, info := range rl.attempts {
-		if info.lockedUntil.Before(cutoff) && info.failCount == 0 {
+		if info.lastSeen.Before(cutoff) && now.After(info.lockedUntil) {
 			delete(rl.attempts, ip)
 		}
 	}
@@ -144,6 +146,7 @@ func (rl *rateLimiter) recordFailure(ip string) {
 	}
 
 	info.failCount++
+	info.lastSeen = now
 
 	// Apply per-IP lockout
 	for _, rule := range ipLockoutRules {
@@ -175,6 +178,7 @@ func (rl *rateLimiter) recordSuccess(ip string) {
 	if info, exists := rl.attempts[ip]; exists {
 		info.failCount = 0
 		info.lockedUntil = time.Time{}
+		info.lastSeen = time.Now()
 	}
 }
 
@@ -192,56 +196,79 @@ func (server *Server) wrapLogger(handler http.Handler) http.Handler {
 func (server *Server) wrapHeaders(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Server", "WebTmux")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
 		handler.ServeHTTP(w, r)
 	})
 }
 
 func (server *Server) wrapBasicAuth(handler http.Handler, credential string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Extract IP (handle proxies)
-		ip := r.RemoteAddr
-		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-			ip = strings.Split(forwarded, ",")[0]
-		}
-		ip = strings.TrimSpace(strings.Split(ip, ":")[0])
-
-		// Check if locked out
-		if locked, remaining, lockType := authRateLimiter.checkLocked(ip); locked {
-			w.Header().Set("Retry-After", fmt.Sprintf("%d", int(remaining.Seconds())+1))
-			if lockType == "global" {
-				log.Printf("Global lockout active, rejected %s (retry in %v)", ip, remaining)
-				http.Error(w, "Too many failed login attempts. Service temporarily locked.", http.StatusTooManyRequests)
-			} else {
-				log.Printf("IP %s locked out (retry in %v)", ip, remaining)
-				http.Error(w, "Too many failed login attempts. Try again later.", http.StatusTooManyRequests)
-			}
+		if !server.requireBasicAuth(w, r, credential) {
 			return
 		}
 
-		token := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
-
-		if len(token) != 2 || strings.ToLower(token[0]) != "basic" {
-			w.Header().Set("WWW-Authenticate", `Basic realm="WebTmux"`)
-			http.Error(w, "Bad Request", http.StatusUnauthorized)
-			return
-		}
-
-		payload, err := base64.StdEncoding.DecodeString(token[1])
-		if err != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-
-		if credential != string(payload) {
-			authRateLimiter.recordFailure(ip)
-			w.Header().Set("WWW-Authenticate", `Basic realm="WebTmux"`)
-			http.Error(w, "Authorization failed", http.StatusUnauthorized)
-			return
-		}
-
-		// Success - reset IP counter
-		authRateLimiter.recordSuccess(ip)
-		log.Printf("Basic Authentication Succeeded: %s", r.RemoteAddr)
 		handler.ServeHTTP(w, r)
 	})
+}
+
+func (server *Server) requireBasicAuth(w http.ResponseWriter, r *http.Request, credential string) bool {
+	ip := server.requestIP(r)
+	if locked, remaining, lockType := authRateLimiter.checkLocked(ip); locked {
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", int(remaining.Seconds())+1))
+		if lockType == "global" {
+			log.Printf("Global lockout active, rejected %s (retry in %v)", ip, remaining)
+			http.Error(w, "Too many failed login attempts. Service temporarily locked.", http.StatusTooManyRequests)
+		} else {
+			log.Printf("IP %s locked out (retry in %v)", ip, remaining)
+			http.Error(w, "Too many failed login attempts. Try again later.", http.StatusTooManyRequests)
+		}
+		return false
+	}
+
+	username, password, ok := r.BasicAuth()
+	if !ok {
+		w.Header().Set("WWW-Authenticate", `Basic realm="WebTmux"`)
+		http.Error(w, "Bad Request", http.StatusUnauthorized)
+		return false
+	}
+
+	if !server.checkCredential(credential, username, password) {
+		authRateLimiter.recordFailure(ip)
+		w.Header().Set("WWW-Authenticate", `Basic realm="WebTmux"`)
+		http.Error(w, "Authorization failed", http.StatusUnauthorized)
+		return false
+	}
+
+	authRateLimiter.recordSuccess(ip)
+	log.Printf("Basic Authentication Succeeded: %s", r.RemoteAddr)
+	return true
+}
+
+func (server *Server) requestIP(r *http.Request) string {
+	if server.options != nil && server.options.TrustProxy {
+		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+			ip := strings.TrimSpace(strings.Split(forwarded, ",")[0])
+			if ip != "" {
+				return ip
+			}
+		}
+	}
+
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}
+
+func (server *Server) checkCredential(credential, username, password string) bool {
+	payload := []byte(username + ":" + password)
+	credBytes := []byte(credential)
+	if len(payload) != len(credBytes) {
+		return false
+	}
+	return subtle.ConstantTimeCompare(payload, credBytes) == 1
 }

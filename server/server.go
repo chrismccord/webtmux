@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -84,9 +85,17 @@ func New(factory Factory, options *Options) (*Server, error) {
 			return matcher.MatchString(r.Header.Get("Origin"))
 		}
 	} else {
-		// Default: allow all origins (auth provides protection)
+		// Default: allow only same-origin WebSocket requests
 		originChekcer = func(r *http.Request) bool {
-			return true
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				return false
+			}
+			parsed, err := url.Parse(origin)
+			if err != nil {
+				return false
+			}
+			return sameHost(parsed.Host, r.Host)
 		}
 	}
 
@@ -112,6 +121,24 @@ func New(factory Factory, options *Options) (*Server, error) {
 	}
 
 	return server, nil
+}
+
+func sameHost(originHost, requestHost string) bool {
+	return strings.EqualFold(stripPort(originHost), stripPort(requestHost))
+}
+
+func stripPort(host string) string {
+	trimmed := host
+	if strings.Contains(host, "]") {
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			trimmed = h
+		}
+	} else if strings.Count(host, ":") == 1 {
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			trimmed = h
+		}
+	}
+	return trimmed
 }
 
 // detectTmuxSession checks if we're running tmux and extracts the session name
@@ -296,7 +323,8 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 
 func (server *Server) setupHTTPServer(handler http.Handler) (*http.Server, error) {
 	srv := &http.Server{
-		Handler: handler,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	if server.options.EnableTLSClientAuth {

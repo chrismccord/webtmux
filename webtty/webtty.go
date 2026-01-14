@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"log"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -199,15 +198,6 @@ func (wt *WebTTY) handleMasterReadEvent(data []byte) error {
 		n, err := wt.decoder.Decode(decodedBuffer, data[1:])
 		if err != nil {
 			return errors.Wrapf(err, "failed to decode received data")
-		}
-
-		// Debug: log all input
-		if n > 0 {
-			if decodedBuffer[0] == 0x1b {
-				log.Printf("DEBUG: Escape sequence: %v (len=%d)", decodedBuffer[:n], n)
-			} else if decodedBuffer[0] < 0x20 {
-				log.Printf("DEBUG: Control char: %v (len=%d)", decodedBuffer[:n], n)
-			}
 		}
 
 		_, err = wt.slave.Write(decodedBuffer[:n])

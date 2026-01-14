@@ -34,6 +34,7 @@ type Options struct {
 	WSQueryArgs         string `hcl:"ws_query_args" flagName:"ws-query-args" flagDescribe:"Querystring arguments to append to the websocket instantiation" default:""`
 	EnableWebGL         bool   `hcl:"enable_webgl" flagName:"enable-webgl" flagDescribe:"Enable WebGL renderer" default:"true"`
 	Quiet               bool   `hcl:"quiet" flagName:"quiet" flagDescribe:"Don't log" default:"false"`
+	TrustProxy          bool   `hcl:"trust_proxy" flagName:"trust-proxy" flagDescribe:"Trust X-Forwarded-For for client IPs (only behind a trusted proxy)" default:"false"`
 
 	TitleVariables map[string]interface{}
 }

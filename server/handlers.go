@@ -30,6 +30,12 @@ func (server *Server) generateHandleWS(ctx context.Context, cancel context.Cance
 	}()
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		if server.options.EnableBasicAuth {
+			if !server.requireBasicAuth(w, r, server.options.Credential) {
+				return
+			}
+		}
+
 		if server.options.Once {
 			success := atomic.CompareAndSwapInt64(once, 0, 1)
 			if !success {
@@ -106,9 +112,6 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, h
 	err = json.Unmarshal(initLine, &init)
 	if err != nil {
 		return errors.Wrapf(err, "failed to authenticate websocket connection")
-	}
-	if init.AuthToken != server.options.Credential {
-		return errors.New("failed to authenticate websocket connection")
 	}
 
 	queryPath := "?"
@@ -273,15 +276,18 @@ func (server *Server) indexVariables(r *http.Request) (map[string]interface{}, e
 
 func (server *Server) handleAuthToken(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/javascript")
-	// @TODO hashing?
-	w.Write([]byte("var gotty_auth_token = '" + server.options.Credential + "';"))
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write([]byte("var gotty_auth_token = '';"))
 }
 
 func (server *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/javascript")
+	w.Header().Set("Cache-Control", "no-store")
+	termValue, _ := json.Marshal("xterm")
+	queryValue, _ := json.Marshal(server.options.WSQueryArgs)
 	lines := []string{
-		"var gotty_term = 'xterm';",
-		"var gotty_ws_query_args = '" + server.options.WSQueryArgs + "';",
+		"var gotty_term = " + string(termValue) + ";",
+		"var gotty_ws_query_args = " + string(queryValue) + ";",
 	}
 
 	w.Write([]byte(strings.Join(lines, "\n")))
