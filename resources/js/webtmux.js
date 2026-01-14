@@ -46,7 +46,10 @@ class WebTmux {
     this.layout = null;
     this.pendingSessionSwitch = null;
     this.oscBuffer = ''; // Buffer for OSC sequence detection
-
+    this.pingTimer = null;
+    this.pingIntervalMs = 30000;
+    this.pingFailures = 0;
+    this.statusBanner = null;
     this.init();
   }
 
@@ -185,6 +188,7 @@ class WebTmux {
 
     // Expose for components
     window.webtmux = this;
+    this.createStatusBanner();
   }
 
   setupTouchHandling() {
@@ -254,10 +258,9 @@ class WebTmux {
 
     this.ws.onopen = () => {
       console.log('WebSocket connected');
-
-      // Send auth token
-      const authToken = window.gotty_auth_token || '';
-      this.ws.send(JSON.stringify({ AuthToken: authToken, Arguments: '' }));
+      this.hideStatusBanner();
+      // Initialize session
+      this.ws.send(JSON.stringify({ Arguments: '' }));
 
       // Tell server to expect base64 encoded input
       this.sendMessage(MSG.SetEncoding, 'base64');
@@ -276,6 +279,9 @@ class WebTmux {
           this.pendingSessionSwitch = null;
         }, 200);
       }
+      this.resetPing();
+      this.schedulePing();
+
     };
 
     this.ws.onmessage = (event) => {
@@ -284,7 +290,11 @@ class WebTmux {
 
     this.ws.onclose = () => {
       console.log('WebSocket closed');
-
+      this.showStatusBanner('Disconnected. Reconnecting...');
+      if (this.pingTimer) {
+        clearTimeout(this.pingTimer);
+        this.pingTimer = null;
+      }
       // Check if there are other sessions to switch to
       const otherSessions = this.layout?.sessions?.filter(s => !s.active) || [];
       if (otherSessions.length > 0) {
@@ -367,6 +377,82 @@ class WebTmux {
     } else {
       console.warn('WebSocket not ready, state:', this.ws?.readyState);
     }
+  }
+
+  resetPing() {
+    this.pingFailures = 0;
+    this.pingIntervalMs = 30000;
+    this.hideStatusBanner();
+  }
+
+  schedulePing() {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    this.pingTimer = setTimeout(() => {
+      const ok = this.sendPing();
+      if (!ok) {
+        this.pingFailures += 1;
+        this.pingIntervalMs = Math.min(this.pingIntervalMs * 2, 300000);
+        this.showStatusBanner(`Connection unstable. Retrying ping in ${Math.round(this.pingIntervalMs / 1000)}s`);
+      } else {
+        this.resetPing();
+      }
+      this.schedulePing();
+    }, this.pingIntervalMs);
+  }
+
+  sendPing() {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return false;
+    }
+
+    try {
+      this.ws.send(MSG.Ping);
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  createStatusBanner() {
+    const banner = document.createElement('div');
+    banner.style.position = 'fixed';
+    banner.style.bottom = '10px';
+    banner.style.left = '50%';
+    banner.style.transform = 'translateX(-50%)';
+    banner.style.background = '#0f3460';
+    banner.style.border = '1px solid #e94560';
+    banner.style.borderRadius = '6px';
+    banner.style.color = '#fff';
+    banner.style.padding = '6px 10px';
+    banner.style.fontSize = '12px';
+    banner.style.zIndex = '2000';
+    banner.style.display = 'none';
+    banner.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.3)';
+    document.body.appendChild(banner);
+    this.statusBanner = banner;
+  }
+
+  showStatusBanner(message) {
+    if (!this.statusBanner) {
+      return;
+    }
+    this.statusBanner.textContent = message;
+    this.statusBanner.style.display = 'block';
+  }
+
+  hideStatusBanner() {
+    if (this.statusBanner) {
+      this.statusBanner.style.display = 'none';
+    }
+  }
+
+  sendInput(text) {
+    const bytes = this.encoder.encode(text);
+    const binary = String.fromCharCode(...bytes);
+    this.sendMessage(MSG.Input, btoa(binary));
   }
 
   sendResize() {

@@ -168,12 +168,17 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, h
 	// Set up tmux controller if available
 	if server.tmuxCtrl != nil {
 		tty.SetTmuxController(server.tmuxCtrl)
-
-		// Start goroutine to listen for tmux events and broadcast layout updates
-		go server.handleTmuxEvents(ctx, tty)
 	}
 
-	err = tty.Run(ctx)
+	connCtx, cancelConn := context.WithCancel(ctx)
+	defer cancelConn()
+	if server.tmuxCtrl != nil {
+		// Start goroutine to listen for tmux events and broadcast layout updates
+		go server.handleTmuxEvents(connCtx, tty)
+	}
+
+	err = tty.Run(connCtx)
+	cancelConn()
 
 	return err
 }
@@ -207,7 +212,8 @@ func (server *Server) handleTmuxEvents(ctx context.Context, tty *webtty.WebTTY) 
 			if currentLayout != lastLayout {
 				lastLayout = currentLayout
 				if err := tty.SendTmuxLayout(); err != nil {
-					log.Printf("Failed to send tmux layout: %v", err)
+					log.Printf("Stopping tmux layout updates: %v", err)
+					return
 				}
 			}
 		}
