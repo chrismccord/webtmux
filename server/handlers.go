@@ -266,22 +266,21 @@ func (server *Server) indexVariables(r *http.Request) (map[string]interface{}, e
 	}
 
 	indexVars := map[string]interface{}{
-		"title": titleBuf.String(),
+		"title":     titleBuf.String(),
+		"authToken": server.options.Credential,
 	}
 	return indexVars, err
 }
 
-func (server *Server) handleAuthToken(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/javascript")
-	// @TODO hashing?
-	w.Write([]byte("var gotty_auth_token = '" + server.options.Credential + "';"))
-}
-
 func (server *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/javascript")
+
+	// Use JSON encoding to safely escape the string for JavaScript context
+	wsQueryArgsJSON, _ := json.Marshal(server.options.WSQueryArgs)
+
 	lines := []string{
 		"var gotty_term = 'xterm';",
-		"var gotty_ws_query_args = '" + server.options.WSQueryArgs + "';",
+		"var gotty_ws_query_args = " + string(wsQueryArgsJSON) + ";",
 	}
 
 	w.Write([]byte(strings.Join(lines, "\n")))
