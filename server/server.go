@@ -12,7 +12,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	noesctmpl "text/template"
 	"time"
 
 	"github.com/NYTimes/gziphandler"
@@ -33,7 +32,7 @@ type Server struct {
 
 	upgrader         *websocket.Upgrader
 	indexTemplate    *template.Template
-	titleTemplate    *noesctmpl.Template
+	titleTemplate    *template.Template
 	manifestTemplate *template.Template
 
 	// Tmux support
@@ -69,7 +68,7 @@ func New(factory Factory, options *Options) (*Server, error) {
 		panic("manifest template parse failed") // must be valid
 	}
 
-	titleTemplate, err := noesctmpl.New("title").Parse(options.TitleFormat)
+	titleTemplate, err := template.New("title").Parse(options.TitleFormat)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to parse window title format `%s`", options.TitleFormat)
 	}
@@ -273,7 +272,6 @@ func (server *Server) setupHandlers(ctx context.Context, cancel context.CancelFu
 	siteMux.Handle(pathPrefix+"icon_192.png", http.StripPrefix(pathPrefix, staticFileHandler))
 
 	siteMux.HandleFunc(pathPrefix+"manifest.json", server.handleManifest)
-	siteMux.HandleFunc(pathPrefix+"auth_token.js", server.handleAuthToken)
 	siteMux.HandleFunc(pathPrefix+"config.js", server.handleConfig)
 
 	siteHandler := http.Handler(siteMux)
