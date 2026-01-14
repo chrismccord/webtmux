@@ -82,7 +82,11 @@ func main() {
 		} else {
 			// Generate random credentials
 			appOptions.EnableBasicAuth = true
-			appOptions.Credential = "admin:" + generateRandomPassword(32)
+			password, err := generateRandomPassword(32)
+			if err != nil {
+				exit(err, 1)
+			}
+			appOptions.Credential = "admin:" + password
 			fmt.Printf("\n")
 			fmt.Printf("========================================\n")
 			fmt.Printf("  Authentication Required (default)\n")
@@ -182,8 +186,10 @@ func waitSignals(errs chan error, cancel context.CancelFunc, gracefullCancel con
 	}
 }
 
-func generateRandomPassword(length int) string {
+func generateRandomPassword(length int) (string, error) {
 	b := make([]byte, length)
-	rand.Read(b)
-	return base64.URLEncoding.EncodeToString(b)[:length]
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b)[:length], nil
 }

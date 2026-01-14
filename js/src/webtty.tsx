@@ -109,11 +109,6 @@ export class WebTTY {
     args: string;
 
     /*
-     * An authentication token. The client gets this from `/auth_token.js`.
-     */
-    authToken: string;
-
-    /*
      * If connection is dropped, reconnect after `reconnect` seconds.
      * -1 means do not reconnect.
      */
@@ -126,11 +121,10 @@ export class WebTTY {
      */
     bufSize: number;
 
-    constructor(term: Terminal, connectionFactory: ConnectionFactory, args: string, authToken: string) {
+    constructor(term: Terminal, connectionFactory: ConnectionFactory, args: string) {
         this.term = term;
         this.connectionFactory = connectionFactory;
         this.args = args;
-        this.authToken = authToken;
         this.reconnect = -1;
         this.bufSize = 1024;
     };
@@ -145,7 +139,7 @@ export class WebTTY {
             connection.onOpen(() => {
                 const termInfo = this.term.info();
 
-                this.initializeConnection(this.args, this.authToken);
+                this.initializeConnection(this.args);
 
                 this.term.onResize((columns: number, rows: number) => {
                     this.sendResizeTerminal(columns, rows);
@@ -216,11 +210,10 @@ export class WebTTY {
         }
     };
 
-    private initializeConnection(args, authToken) {
+    private initializeConnection(args) {
         this.connection.send(JSON.stringify(
             {
                 Arguments: args,
-                AuthToken: authToken,
             }
         ));
     }
