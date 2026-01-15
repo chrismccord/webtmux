@@ -35,12 +35,19 @@ type Options struct {
 	EnableWebGL         bool   `hcl:"enable_webgl" flagName:"enable-webgl" flagDescribe:"Enable WebGL renderer" default:"true"`
 	Quiet               bool   `hcl:"quiet" flagName:"quiet" flagDescribe:"Don't log" default:"false"`
 
+	// WebTransport options
+	EnableWebTransport bool   `hcl:"enable_webtransport" flagName:"webtransport" flagDescribe:"Enable WebTransport support (requires TLS)" default:"false"`
+	WebTransportPort   string `hcl:"webtransport_port" flagName:"wt-port" flagDescribe:"WebTransport UDP port" default:"8443"`
+
 	TitleVariables map[string]interface{}
 }
 
 func (options *Options) Validate() error {
 	if options.EnableTLSClientAuth && !options.EnableTLS {
 		return errors.New("TLS client authentication is enabled, but TLS is not enabled")
+	}
+	if options.EnableWebTransport && !options.EnableTLS {
+		return errors.New("WebTransport requires TLS to be enabled")
 	}
 	return nil
 }
