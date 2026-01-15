@@ -6,6 +6,7 @@ class WebtmuxMobileControls extends LitElement {
     showPaneSelector: { type: Boolean },
     showSessionSelector: { type: Boolean },
     layout: { type: Object },
+    activePane: { type: String },
   };
 
   static styles = css`
@@ -254,9 +255,11 @@ class WebtmuxMobileControls extends LitElement {
     this.showPaneSelector = false;
     this.showSessionSelector = false;
     this.layout = null;
+    this.activePane = '';
 
     window.addEventListener('tmux-layout-update', (e) => {
       this.layout = e.detail;
+      this.activePane = e.detail.activePaneId;
     });
   }
 
@@ -267,6 +270,7 @@ class WebtmuxMobileControls extends LitElement {
     return html`
       <!-- Session overlay -->
       <div class="session-overlay ${this.showSessionSelector ? 'open' : ''}" @click=${this.closeSessionSelector}>
+        <button class="close-overlay" @click=${this.closeSessionSelector}>×</button>
         <div class="session-modal" @click=${(e) => e.stopPropagation()}>
           <h3>Switch Session</h3>
           <div class="session-list">
@@ -364,6 +368,14 @@ class WebtmuxMobileControls extends LitElement {
           </svg>
           New
         </button>
+
+        <button class="control-btn" @click=${this.closePane}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+          Close
+        </button>
       </div>
     `;
   }
@@ -406,6 +418,10 @@ class WebtmuxMobileControls extends LitElement {
   switchSession(sessionName) {
     window.webtmux?.switchSession(sessionName);
     this.showSessionSelector = false;
+  }
+
+  closePane() {
+    window.webtmux?.closePane(this.activePane);
   }
 }
 
