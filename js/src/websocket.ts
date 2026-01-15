@@ -1,59 +1,66 @@
-export class ConnectionFactory {
-    url: string;
-    protocols: string[];
+import type { Transport, TransportFactory } from './transport';
 
-    constructor(url: string, protocols: string[]) {
-        this.url = url;
-        this.protocols = protocols;
-    };
-
-    create(): Connection {
-        return new Connection(this.url, this.protocols);
-    };
-}
-
-export class Connection {
-    bare: WebSocket;
+/**
+ * WebSocket connection wrapper that implements the Transport interface.
+ */
+export class WebSocketConnection implements Transport {
+    private bare: WebSocket;
 
     constructor(url: string, protocols: string[]) {
         this.bare = new WebSocket(url, protocols);
     }
 
-    open() {
-        // nothing todo for websocket
-    };
-
-    close() {
-        this.bare.close();
-    };
-
-    send(data: string) {
-        this.bare.send(data);
-    };
-
-    isOpen(): boolean {
-        if (this.bare.readyState == WebSocket.CONNECTING ||
-            this.bare.readyState == WebSocket.OPEN) {
-            return true
-        }
-        return false
+    open(): void {
+        // WebSocket connects automatically in constructor
     }
 
-    onOpen(callback: () => void) {
-        this.bare.onopen = (event) => {
-            callback();
-        }
-    };
+    close(): void {
+        this.bare.close();
+    }
 
-    onReceive(callback: (data: string) => void) {
-        this.bare.onmessage = (event) => {
-            callback(event.data);
-        }
-    };
+    send(data: string): void {
+        this.bare.send(data);
+    }
 
-    onClose(callback: () => void) {
-        this.bare.onclose = (event) => {
-            callback();
-        };
-    };
+    isOpen(): boolean {
+        return this.bare.readyState === WebSocket.CONNECTING ||
+               this.bare.readyState === WebSocket.OPEN;
+    }
+
+    onOpen(callback: () => void): void {
+        this.bare.onopen = () => callback();
+    }
+
+    onReceive(callback: (data: string) => void): void {
+        this.bare.onmessage = (event) => callback(event.data);
+    }
+
+    onClose(callback: () => void): void {
+        this.bare.onclose = () => callback();
+    }
 }
+
+/**
+ * Factory for creating WebSocket connections.
+ */
+export class WebSocketFactory implements TransportFactory {
+    private url: string;
+    private protocols: string[];
+
+    constructor(url: string, protocols: string[]) {
+        this.url = url;
+        this.protocols = protocols;
+    }
+
+    create(): Transport {
+        return new WebSocketConnection(this.url, this.protocols);
+    }
+
+    protocol(): string {
+        return 'websocket';
+    }
+}
+
+// Backward compatibility exports
+export { WebSocketFactory as ConnectionFactory };
+export { WebSocketConnection as Connection };

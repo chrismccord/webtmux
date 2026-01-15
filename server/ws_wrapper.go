@@ -7,12 +7,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-type wsWrapper struct {
+// wsTransport wraps a WebSocket connection to implement the Transport interface.
+type wsTransport struct {
 	*websocket.Conn
 }
 
-func (wsw *wsWrapper) Write(p []byte) (n int, err error) {
-	writer, err := wsw.Conn.NextWriter(websocket.TextMessage)
+// Write sends data over the WebSocket connection as a TextMessage.
+func (wst *wsTransport) Write(p []byte) (n int, err error) {
+	writer, err := wst.Conn.NextWriter(websocket.TextMessage)
 	if err != nil {
 		return 0, err
 	}
@@ -20,9 +22,10 @@ func (wsw *wsWrapper) Write(p []byte) (n int, err error) {
 	return writer.Write(p)
 }
 
-func (wsw *wsWrapper) Read(p []byte) (n int, err error) {
+// Read reads data from the WebSocket connection, only accepting TextMessages.
+func (wst *wsTransport) Read(p []byte) (n int, err error) {
 	for {
-		msgType, reader, err := wsw.Conn.NextReader()
+		msgType, reader, err := wst.Conn.NextReader()
 		if err != nil {
 			return 0, err
 		}
@@ -32,10 +35,26 @@ func (wsw *wsWrapper) Read(p []byte) (n int, err error) {
 		}
 
 		b, err := io.ReadAll(reader)
+		if err != nil {
+			return 0, err
+		}
 		if len(b) > len(p) {
-			return 0, errors.Wrapf(err, "Client message exceeded buffer size")
+			return 0, errors.New("client message exceeded buffer size")
 		}
 		n = copy(p, b)
-		return n, err
+		return n, nil
 	}
 }
+
+// Close closes the WebSocket connection.
+func (wst *wsTransport) Close() error {
+	return wst.Conn.Close()
+}
+
+// RemoteAddr returns the remote address of the WebSocket connection.
+func (wst *wsTransport) RemoteAddr() string {
+	return wst.Conn.RemoteAddr().String()
+}
+
+// Ensure wsTransport implements Transport interface
+var _ Transport = (*wsTransport)(nil)

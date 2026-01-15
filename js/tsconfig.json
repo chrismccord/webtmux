@@ -15,8 +15,13 @@
       "types": ["preact", "node"],
       "paths": {
           "*": ["./typings/*"]
-      }
+      },
+      "typeRoots": ["./node_modules/@types", "./typings"]
   },
+    "include": [
+      "src/**/*",
+      "typings/**/*"
+    ],
     "exclude": [
       "node_modules",
       "dist"
