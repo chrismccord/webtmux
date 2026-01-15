@@ -6,6 +6,7 @@ import { WebglAddon } from '@xterm/addon-webgl';
 // Import components
 import './components/sidebar.js';
 import './components/mobile-controls.js';
+import './components/shortcuts.js';
 
 // Protocol message types (must match Go constants)
 const MSG = {
@@ -414,6 +415,13 @@ class WebTmux {
   exitCopyMode() {
     this.sendMessage(MSG.TmuxCopyMode, '0');
     this.inCopyMode = false;
+  }
+
+  // Send raw key bytes to terminal (used by shortcuts component)
+  sendKeys(keys) {
+    const bytes = new Uint8Array(keys);
+    const binary = String.fromCharCode(...bytes);
+    this.sendMessage(MSG.Input, btoa(binary));
   }
 
   // Handle OSC 52 clipboard sequences from tmux
