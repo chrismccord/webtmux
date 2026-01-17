@@ -4,7 +4,7 @@ A web-based terminal with tmux-specific features. Access your tmux sessions from
 
 ## Quick Start (Sprite)
 
-Deploy webtmux as a service on [Sprite](https://sprites.app):
+Deploy webtmux as a service on [Sprite](https://sprites.dev):
 
 ```bash
 sudo curl -fsSL https://raw.githubusercontent.com/chrismccord/webtmux/main/builds/webtmux-linux-amd64 \
